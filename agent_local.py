@@ -1,17 +1,18 @@
-import os
-from dotenv import load_dotenv
-from langchain.tools import tool
 import datetime
-
-from langchain_ollama import ChatOllama
+import logging
 
 from langchain.agents import create_agent
+from langchain.tools import tool
+from langchain_ollama import ChatOllama
+
+from app.config import settings
+from app.logging_config import configure_logging
+from app.services.agent_service import AgentService
 
 
 
-
-
-load_dotenv()   # optional: load environment variables from a .env file
+configure_logging(settings.log_level)
+logger = logging.getLogger(__name__)
 
 @tool
 def get_current_datetime(format: str = "%Y-%m-%d %H:%M:%S") -> str:
@@ -22,24 +23,26 @@ def get_current_datetime(format: str = "%Y-%m-%d %H:%M:%S") -> str:
     If no format is specified, defaults to '%Y-%m-%d %H:%M:%S'.
     """
     try:
-        return datetime.datetime.now().strftime(format)
-    except Exception as e:
-        return f"Error formatting date/time: {e}"
+        return datetime.datetime.now(tz=datetime.timezone.utc).strftime(format)
+    except (TypeError, ValueError) as exc:
+        return f"Error formatting date/time: {exc}"
 
 # list of tools agent can use
 tools = [get_current_datetime]
-print("Custom tool defined")
+logger.info("Custom tool defined")
 
-def get_agent_llm(model_name="qwen3:8b", temperature=0):
+def get_agent_llm(model_name=None, temperature=0):
     """
     Initializes the Ollama LLM for the agent.
     """
+    model_name = model_name or settings.chat_model
     llm = ChatOllama(
         model=model_name, 
+        base_url=settings.ollama_base_url,
         temperature=temperature,
         # num_ctx=8192  # context window size. Consider increasing if you need to handle larger contexts.
         )
-    print(f"Initialized Ollama LLM with model: {model_name} and temperature: {temperature}")
+    logger.info("Initialized Ollama LLM", extra={"model": model_name, "temperature": temperature})
     return llm
 
 # agent_llm = get_agent_llm()
@@ -53,7 +56,7 @@ def get_agent_prompt(prompt_hub_name="hwchase17/openai-tools-agent"):
         "You are a helpful assistant. Use the available tools when they help answer "
         "the user's question."
     )
-    print("Using local system prompt for the agent.")
+    logger.info("Using local system prompt for the agent")
     return prompt
 
 # agent_prompt = get_agent_prompt() # Call this later
@@ -67,7 +70,7 @@ def build_agent(llm, tools, prompt):
         tools=tools,
         system_prompt=prompt
     )
-    print("Agent runnable created.")
+    logger.info("Agent runnable created")
     return agent
 
 # agetn_runnable = build_agent(agent_llm, tools, agent_prompt) # Call this later
@@ -76,29 +79,22 @@ def create_agent_executor(agent, tools, verbose=True):
     """
     Returns the compiled agent graph.
     """
-    print("Agent graph created.")
+    logger.info("Agent graph created")
     return agent
 
 # agent_executor = create_agent_executor(agent_runnable, tools) # Call this 
 
 def run_agent(executor, user_input):
     """Runs the agent executor with the given input. """
-    print("\nInvoking agent...")
-    print(f"Input: {user_input}")
-    response = executor.invoke({"messages": [{"role": "user", "content": user_input}]})
-    print("\nAgent Response:")
-    messages = response.get("messages", []) if isinstance(response, dict) else []
-    if messages:
-        print(messages[-1].content)
-    else:
-        print(response)
+    logger.info("Invoking agent", extra={"input": user_input})
+    return AgentService(executor).answer(user_input)
 
 # ----- Main Execution -----
 if __name__ == "__main__":
     # 1. Define tools (already defined above)
 
     # 2. Get agent LLM
-    agent_llm = get_agent_llm(model_name="qwen3:8b")
+    agent_llm = get_agent_llm()
 
     # 3. Get agent prompt
     agent_prompt = get_agent_prompt()
@@ -113,8 +109,8 @@ if __name__ == "__main__":
 
 
     # run agent
-    run_agent(agent_executor, "What is the current date and time?")
+    print(run_agent(agent_executor, "What is the current date and time?"))
     
-    run_agent(agent_executor, "What time is it right now? Use HH:MM format.")
+    print(run_agent(agent_executor, "What time is it right now? Use HH:MM format."))
     
-    run_agent(agent_executor, "Tell me a joke.")
+    print(run_agent(agent_executor, "Tell me a joke."))

@@ -7,4 +7,5 @@ sentence-transformers
 pypdf 
 python-dotenv 
 unstructured[pdf] 
+python-docx
 tiktoken

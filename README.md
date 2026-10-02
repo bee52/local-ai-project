@@ -34,12 +34,21 @@ A lightweight Python prototype for a locally hosted AI stack using Ollama, LangC
 - Invokes the agent using LangChain's `create_agent`
 - Prints the tool-based response for user queries
 
+### Ingestion foundation
+
+The shared `app.ingestion` package provides format-aware loading for PDF, Markdown,
+plain text, HTML, DOCX, JSON, and CSV sources. It preserves source metadata,
+generates stable document and chunk IDs, computes SHA-256 content hashes, and skips
+content already seen by an ingestion service instance. The legacy PDF helper remains
+available while the application services are being extracted.
+
 ## Repository structure
 
 ```text
 .
 ├── agent_local.py          # Tool-calling local agent example
 ├── rag_local.py            # RAG pipeline and retrieval flow
+├── app/                    # Shared settings, contracts, services, and ingestion
 ├── requirements.txt        # Python package dependencies
 ├── data/
 │   └── llama2.pdf          # Source PDF for local retrieval demo

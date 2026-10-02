@@ -1,5 +1,12 @@
 import os
-from dotenv import load_dotenv
+import logging
+from pathlib import Path
+
+from app.config import settings
+from app.ingestion.service import IngestionService
+from app.logging_config import configure_logging
+from app.models import QueryRequest
+from app.services.query_service import QueryService
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -12,17 +19,17 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
 
-load_dotenv()
+configure_logging(settings.log_level)
+logger = logging.getLogger(__name__)
 
-DATA_PATH = "data/"
+DATA_PATH = str(settings.data_path)
 PDF_FILENAME = "llama2.pdf"
 
 def load_documents():
     """Loads documents from the specified data path."""
     pdf_path = os.path.join(DATA_PATH, PDF_FILENAME)
-    loader = PyPDFLoader(pdf_path)
-    documents = loader.load()
-    print(f"Loaded {len(documents)} page(s) from {pdf_path}.")
+    documents = IngestionService().load_documents(Path(pdf_path))
+    logger.info("Loaded documents", extra={"count": len(documents), "source": pdf_path})
     return documents
 
 # documents = load_documents() 
@@ -30,28 +37,29 @@ def load_documents():
 def split_documents(documents):
     """Splits the loaded documents into smaller chunks."""
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200,
+        chunk_size=settings.chunk_size,
+        chunk_overlap=settings.chunk_overlap,
         length_function=len,
         is_separator_regex = False,
     )
     all_splits = text_splitter.split_documents(documents)
-    print(f"Split into {len(all_splits)} chunks.")
+    logger.info("Split documents", extra={"count": len(all_splits)})
     return all_splits
 
 # load_docs = load_documents()
 # chunks = split_documents(load_docs)
 
 
-def get_embedding_function(model_name="nomic-embed-text"):
+def get_embedding_function(model_name=None):
     """Initializes the Ollama embedding function."""
     # Ensure Ollama server is running (ollama serve)
-    embeddings = OllamaEmbeddings(model=model_name)
-    print(f"Initialized Ollama embeddings with model: {model_name}")
+    model_name = model_name or settings.embedding_model
+    embeddings = OllamaEmbeddings(model=model_name, base_url=settings.ollama_base_url)
+    logger.info("Initialized Ollama embeddings", extra={"model": model_name})
     return embeddings
 
 
-CHROMA_PATH = "chroma_db"
+CHROMA_PATH = str(settings.chroma_path)
 
 def get_vector_store(embedding_function, persist_directory=CHROMA_PATH):
     """Initializes the Chroma vector store."""
@@ -59,7 +67,7 @@ def get_vector_store(embedding_function, persist_directory=CHROMA_PATH):
         persist_directory=persist_directory,
         embedding_function=embedding_function
     )
-    print(f"Initialized Chroma vector store at: {persist_directory}")
+    logger.info("Initialized Chroma vector store", extra={"path": persist_directory})
     return vectorstore
 
 # embedding_function = get_embedding_function()
@@ -67,7 +75,7 @@ def get_vector_store(embedding_function, persist_directory=CHROMA_PATH):
 
 def index_documents(chunks, embedding_function, persist_directory=CHROMA_PATH):
     """Indexes the document chunks into the Chroma vector store."""
-    print(f"Indexing {len(chunks)} chunks into Chroma vector store...")
+    logger.info("Indexing chunks", extra={"count": len(chunks)})
     vectorstore = Chroma.from_documents(
         documents=chunks,
         embedding=embedding_function,
@@ -75,28 +83,31 @@ def index_documents(chunks, embedding_function, persist_directory=CHROMA_PATH):
     )
 
     vectorstore.persist()   # ensure data is saved
-    print(f"Indexing complete. Data saved to: {persist_directory}")
+    logger.info("Indexing complete", extra={"path": persist_directory})
     return vectorstore
 
 # vector_store = index_documents(chunks, embedding_function)
 
-def create_rag_chain(vector_store, llm_model_name="qwen3:8b", context_window=8192):
+def create_rag_chain(vector_store, llm_model_name=None, context_window=None):
     """Creates the RAG chain"""
     # initialize the LLM
+    llm_model_name = llm_model_name or settings.chat_model
+    context_window = context_window or settings.context_window
     llm = ChatOllama(
         model=llm_model_name,
+        base_url=settings.ollama_base_url,
         temperature=0,
         num_ctx=context_window
     )
 
-    print(f"Initialized ChatOllama with model: {llm_model_name}, context window: {context_window}")
+    logger.info("Initialized ChatOllama", extra={"model": llm_model_name, "context_window": context_window})
 
     # create the retriever from the vector store
     retriever = vector_store.as_retriever(
         search_type= "similarity",
-        search_kwargs={"k": 3} # retrieve top 3 relevant chunks
+        search_kwargs={"k": settings.retrieval_k}
     )
-    print("Retriever created.")
+    logger.info("Retriever created", extra={"k": settings.retrieval_k})
 
     # Define the prompt template for the RAG chain
     template = """Answer the question based ONLY on the following context:
@@ -104,7 +115,6 @@ def create_rag_chain(vector_store, llm_model_name="qwen3:8b", context_window=819
     
     Question: {question}"""
     prompt = ChatPromptTemplate.from_template(template)
-    print("Prompt template created.")
 
     # Define the RAG chain
     rag_chain = (
@@ -113,7 +123,7 @@ def create_rag_chain(vector_store, llm_model_name="qwen3:8b", context_window=819
         | llm
         | StrOutputParser()
         )
-    print("RAG chain created.")
+    logger.info("RAG chain created")
     return rag_chain
 
 # vector_store = get_vector_store(embedding_function) # Assuming DB is already indexed
@@ -122,11 +132,12 @@ def create_rag_chain(vector_store, llm_model_name="qwen3:8b", context_window=819
 
 def query_rag(chain, question):
     """Queries the RAG chain and prints the response."""
-    print("\nQuerying RAG chain...")
-    print(f"Question: {question}")
-    response = chain.invoke(question)
-    print("\nResponse:")
-    print(response)
+    logger.info("Querying RAG chain", extra={"question": question})
+    response = QueryService(chain).answer(
+        QueryRequest(question=question)
+    )
+    logger.info("RAG response generated")
+    return response.answer
 
 
 # ---- Main Execution ----
@@ -151,7 +162,7 @@ if __name__ == "__main__":
     vector_store = get_vector_store(embedding_function)
 
     # 5. Create RAG chain
-    rag_chain = create_rag_chain(vector_store, llm_model_name="qwen3:8b" )
+    rag_chain = create_rag_chain(vector_store)
 
     # 6. Query RAG chain
     sample_question = "What is the main topic of the document?"
