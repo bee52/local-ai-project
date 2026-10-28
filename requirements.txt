@@ -8,4 +8,8 @@ pypdf
 python-dotenv 
 unstructured[pdf] 
 python-docx
+mcp
+fastapi
+uvicorn
+pytest
 tiktoken

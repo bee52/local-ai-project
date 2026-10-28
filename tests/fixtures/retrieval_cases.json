@@ -1,0 +1,10 @@
+[
+  {
+    "question": "How does retrieval use citations?",
+    "relevant_chunk_ids": ["fixture-citations"]
+  },
+  {
+    "question": "How are ingestion duplicates handled?",
+    "relevant_chunk_ids": ["fixture-deduplication"]
+  }
+]

@@ -1,7 +1,7 @@
 """Application settings loaded from environment variables."""
 
-from dataclasses import dataclass
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -42,9 +42,14 @@ class Settings:
     chunk_size: int = 1000
     chunk_overlap: int = 200
     retrieval_k: int = 3
+    retrieval_candidate_k: int = 10
+    dense_weight: float = 0.6
+    lexical_weight: float = 0.4
+    reranker_model: str = ""
     context_window: int = 8192
     request_timeout_seconds: float = 60.0
     max_retries: int = 2
+    max_workers: int = 4
     log_level: str = "INFO"
 
     @classmethod
@@ -63,11 +68,16 @@ class Settings:
             chunk_size=_get_int("LOCAL_AI_CHUNK_SIZE", 1000),
             chunk_overlap=_get_int("LOCAL_AI_CHUNK_OVERLAP", 200),
             retrieval_k=_get_int("LOCAL_AI_RETRIEVAL_K", 3),
+            retrieval_candidate_k=_get_int("LOCAL_AI_RETRIEVAL_CANDIDATE_K", 10),
+            dense_weight=_get_float("LOCAL_AI_DENSE_WEIGHT", 0.6),
+            lexical_weight=_get_float("LOCAL_AI_LEXICAL_WEIGHT", 0.4),
+            reranker_model=os.getenv("LOCAL_AI_RERANKER_MODEL", ""),
             context_window=_get_int("LOCAL_AI_CONTEXT_WINDOW", 8192),
             request_timeout_seconds=_get_float(
                 "LOCAL_AI_REQUEST_TIMEOUT_SECONDS", 60.0
             ),
             max_retries=_get_int("LOCAL_AI_MAX_RETRIES", 2),
+            max_workers=_get_int("LOCAL_AI_MAX_WORKERS", 4),
             log_level=os.getenv("LOCAL_AI_LOG_LEVEL", "INFO").upper(),
         )
 

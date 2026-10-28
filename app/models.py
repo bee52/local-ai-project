@@ -80,3 +80,13 @@ class IngestionResult:
     status: str
     chunks: tuple[DocumentChunk, ...] = ()
     detail: str = ""
+
+
+@dataclass(frozen=True)
+class RetrievalResult:
+    """A ranked chunk returned by a retrieval strategy."""
+
+    chunk: DocumentChunk
+    score: float
+    strategy: str
+

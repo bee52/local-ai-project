@@ -5,6 +5,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from app.reliability import get_request_id
+
 
 class JsonFormatter(logging.Formatter):
     """Format log records as one JSON object per line."""
@@ -16,6 +18,12 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+        request_id = get_request_id()
+        if request_id:
+            payload["request_id"] = request_id
+        for field in ("operation", "elapsed_seconds", "success", "attempt", "delay_seconds"):
+            if hasattr(record, field):
+                payload[field] = getattr(record, field)
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
         return json.dumps(payload, default=str)

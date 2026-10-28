@@ -93,12 +93,12 @@ The CLI, API, worker, MCP server, and user interface must call shared applicatio
 
 - [x] Phase 1: Foundation and configuration
 - [x] Phase 2: Multi-format ingestion
-- [ ] Phase 3: Advanced retrieval
-- [ ] Phase 4: Reliability and operations
-- [ ] Phase 5: MCP integration
-- [ ] Phase 6: API and worker deployment
-- [ ] Phase 7: Interaction interface
-- [ ] Phase 8: Evaluation and delivery
+- [x] Phase 3: Advanced retrieval
+- [x] Phase 4: Reliability and operations
+- [x] Phase 5: MCP integration
+- [x] Phase 6: API and worker deployment
+- [x] Phase 7: Interaction interface
+- [x] Phase 8: Evaluation and delivery
 
 ## Definition of done
 

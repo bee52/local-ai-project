@@ -42,6 +42,51 @@ generates stable document and chunk IDs, computes SHA-256 content hashes, and sk
 content already seen by an ingestion service instance. The legacy PDF helper remains
 available while the application services are being extracted.
 
+### Retrieval foundation
+
+The shared `app.retrieval` package provides offline-testable lexical retrieval,
+dense-retriever integration, reciprocal-rank hybrid fusion, optional reranking and
+HyDE query expansion seams, retrieval quality metrics, and citation conversion.
+The current CLI still uses its original Chroma chain; API and MCP integration will
+connect that chain to this pipeline in later phases.
+
+### Reliability foundation
+
+The shared `app.reliability` package provides bounded exponential retries,
+operation timeouts, request IDs, latency metrics, and bounded thread pools. The
+health module provides process liveness and aggregated dependency readiness checks.
+Live Ollama and Chroma checks will be registered by the API and worker entry points.
+
+### MCP foundation
+
+The shared `app.mcp` package exposes search, question answering, document ingestion,
+job status, and health operations through `MCPService`. The optional MCP transport
+adapter in `app/mcp/server.py` registers these operations as typed tools when the
+`mcp` package is installed. It delegates to the same ingestion, retrieval, query,
+and health services used by other application boundaries.
+
+### API and worker foundation
+
+The optional FastAPI application in `app/api/app.py` exposes liveness, readiness,
+dependency details, search, query, ingestion, and job-status endpoints. Long-running
+ingestion is submitted to the bounded in-process `WorkerService`; the worker contract
+can later be backed by Redis/RQ, Arq, or Celery without changing the API contracts.
+Run the service with `uvicorn app.api.app:create_app --factory` after installing the
+requirements.
+
+### Interaction interface
+
+The FastAPI application serves a browser workspace at `/`. It provides a citation-
+first chat flow, controls for hybrid search, reranking, and HyDE, source previews,
+system readiness status, and document ingestion with job-status feedback. The
+interface is intentionally served by the API so local development needs one process:
+
+```bash
+uvicorn app.api.app:create_app --factory --reload
+```
+
+Then open `http://127.0.0.1:8000/`.
+
 ## Repository structure
 
 ```text
@@ -86,11 +131,32 @@ python rag_local.py
 python agent_local.py
 ```
 
+6. Run the offline validation suite:
+
+```bash
+python -m pytest -q
+```
+
+The default suite uses in-memory retrieval, temporary document fixtures, fake
+workers, and FastAPI's test client. It does not require Ollama or external cloud
+services.
+
 ## Notes
 
 - The project is designed as a learning and prototyping foundation.
 - `chroma_db/` is generated runtime state and should not be treated as source code.
 - The system is intentionally minimal and can be extended with better retrieval, evaluation, session memory, structured outputs, and API interfaces.
+- Live end-to-end RAG checks require Ollama running with `qwen3:8b` and `nomic-embed-text`.
+- The local worker is intentionally in-process. Use Redis/RQ, Arq, or Celery before deploying across multiple API instances.
+- Authentication, rate limiting, upload limits, and durable job storage should be added before exposing the API beyond a trusted local network.
+
+## Validation status
+
+Phase 8 delivery validation currently includes:
+
+- 8 offline automated tests covering ingestion, deduplication, retrieval metrics, reranking, HyDE, retries, timeouts, readiness, workers, MCP, API routes, and the interface assets.
+- Python compilation of all application modules and legacy entry points.
+- Separate live validation requirement for Ollama-backed embeddings, Chroma persistence, and local model generation.
 
 ## Future extension opportunities
 

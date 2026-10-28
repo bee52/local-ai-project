@@ -1,7 +1,7 @@
 """Dependency health primitives used by future API and worker entry points."""
 
-from collections.abc import Callable, Iterable
 import logging
+from collections.abc import Callable, Iterable
 
 from app.models import HealthStatus
 
@@ -31,3 +31,16 @@ def run_health_checks(checks: Iterable[HealthCheck]) -> tuple[HealthStatus, ...]
 def process_health_check() -> HealthStatus:
     """Return a liveness result without contacting external services."""
     return HealthStatus(name="process", healthy=True, detail="process is running")
+
+
+def readiness_health_check(checks: Iterable[HealthCheck]) -> HealthStatus:
+    """Aggregate dependency checks into a readiness result."""
+    statuses = run_health_checks(checks)
+    unhealthy = [status.name for status in statuses if not status.healthy]
+    if unhealthy:
+        return HealthStatus(
+            name="readiness",
+            healthy=False,
+            detail=f"unhealthy dependencies: {', '.join(unhealthy)}",
+        )
+    return HealthStatus(name="readiness", healthy=True, detail="dependencies ready")
